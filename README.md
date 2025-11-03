@@ -3,7 +3,7 @@
 新成员加入QQ群时，自动通过 LLM 生成欢迎词并 @ 新成员，支持人格设定与可编辑提示词模板。
 
 - 入口类: [WelcomeLLMPlugin.register()](test plugins/welcome/main.py:9)
-- 事件监听: [WelcomeLLMPlugin.on_group_notice_increase()](test plugins/welcome/main.py:142)
+- 事件监听: [WelcomeLLMPlugin.handle_group_notice_increase()](test plugins/welcome/main.py:142)
 - LLM与人格: [WelcomeLLMPlugin._get_provider()](test plugins/welcome/main.py:34), [WelcomeLLMPlugin._compose_system_prompt()](test plugins/welcome/main.py:73)
 - 提示词生成: [WelcomeLLMPlugin._gen_welcome_text()](test plugins/welcome/main.py:84)
 - 配置 Schema: [_conf_schema.json](test plugins/welcome/_conf_schema.json)

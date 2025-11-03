@@ -140,12 +140,18 @@ class WelcomeLLMPlugin(Star):
         return nickname
 
     @filter.event_message_type(filter.EventMessageType.GROUP_MESSAGE)
-    async def on_group_notice_increase(
-        self, event: AstrMessageEvent, *args, **kwargs
+    async def handle_group_notice_increase(
+        self, event: AstrMessageEvent, *extra_args, **extra_kwargs
     ):
         """
         监听 OneBot notice 中的 group_increase（新成员入群），并@新成员 + LLM欢迎
         """
+        if extra_args or extra_kwargs:
+            logger.debug(
+                "[welcome_llm] handle_group_notice_increase 收到额外参数: args=%s kwargs=%s",
+                extra_args,
+                extra_kwargs,
+            )
         raw = getattr(event.message_obj, "raw_message", None)
         if raw is None:
             logger.debug("[welcome_llm] 收到无 raw_message 的事件，忽略。")
