@@ -1,6 +1,6 @@
 from typing import Optional
 
-from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
+from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
 import astrbot.api.message_components as Comp
@@ -94,11 +94,12 @@ class WelcomeLLMPlugin(Star):
     async def on_group_notice_increase(self, event: AstrMessageEvent):
         """
         监听 OneBot notice 中的 group_increase（新成员入群），并@新成员 + LLM欢迎
-        注意：Notice 事件被转换后仍标记为 GROUP_MESSAGE 类型，这里需用 raw_message 识别。
         """
         # 只处理群消息类型的事件
         if not event.get_group_id():
             return
+            
+        # 检查是否为 notice 事件
         raw = getattr(event.message_obj, "raw_message", {}) or {}
         if not isinstance(raw, dict) or raw.get("post_type") != "notice":
             return
