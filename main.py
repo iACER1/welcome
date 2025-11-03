@@ -4,7 +4,6 @@ from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
 import astrbot.api.message_components as Comp
-import inspect
 
 
 @register("welcome_llm", "YourName", "新成员入群欢迎插件：通过LLM生成欢迎词并@新成员，兼容人格设定", "1.0.0")
@@ -33,33 +32,27 @@ class WelcomeLLMPlugin(Star):
             logger.error(f"[welcome_llm] 获取LLM提供商失败: {e}")
             return None
 
-    async def _build_system_prompt(self, event: AstrMessageEvent) -> str:
-        """组合人格设定与可选前缀，形成最终 system prompt（兼容同步/异步 PersonaManager API）"""
-        persona_prompt = ""
+    def _get_persona_prompt(self, event: AstrMessageEvent) -> str:
+        """获取人格设定的提示词"""
         persona_id = self.config.get("persona_id", "")
         try:
             pm = self.context.persona_manager
             # 优先使用指定人格
             if persona_id:
                 persona = pm.get_persona(persona_id)
-                if inspect.isawaitable(persona):
-                    persona = await persona
-                if persona:
-                    persona_prompt = getattr(persona, "system_prompt", "") or ""
+                if persona and hasattr(persona, "system_prompt"):
+                    return persona.system_prompt or ""
             # 回退默认人格（v3 兼容）
-            if not persona_prompt:
-                v3 = pm.get_default_persona_v3(umo=event.unified_msg_origin)
-                if inspect.isawaitable(v3):
-                    v3 = await v3
-                if v3:
-                    # v3 可能是 TypedDict，也可能是对象；两种方式兼容获取 prompt
-                    persona_prompt = (v3.get("prompt", "") if isinstance(v3, dict) else getattr(v3, "prompt", "")) or ""
+            v3 = pm.get_default_persona_v3(umo=event.unified_msg_origin)
+            if v3:
+                # v3 可能是 TypedDict 或对象
+                if isinstance(v3, dict):
+                    return v3.get("prompt", "") or ""
+                elif hasattr(v3, "prompt"):
+                    return v3.prompt or ""
         except Exception as e:
             logger.warning(f"[welcome_llm] 获取人格失败: {e}")
-
-        base_prefix = self.config.get("system_prompt_prefix", "")
-        parts = [x for x in [persona_prompt, base_prefix] if x]
-        return "\n".join(parts) if parts else "You are a helpful assistant for group welcoming."
+        return ""
 
     async def _gen_welcome_text(self, event: AstrMessageEvent, group_name: str, new_member_nickname: str) -> str:
         """
@@ -67,21 +60,18 @@ class WelcomeLLMPlugin(Star):
         要求 LLM 仅输出正文，不包含 @ 符号，本插件负责真正的 @。
         """
         default_tmpl = (
-            "你是{bot_name}，当有新成员加入QQ群，请用友好的语气欢迎他，"
-            "简要介绍群主题和规则（若已知），邀请其先阅读置顶公告。"
+            "当有新成员加入QQ群，请用友好的语气欢迎他。"
             "输出不超过80字。不要包含@标记。"
             "新成员昵称：{new_member_nickname}，群名：{group_name}。只输出欢迎内容。"
         )
         tmpl = self.config.get("welcome_prompt_template", default_tmpl)
-        bot_name = "AstrBot"
         prompt = tmpl.format(
-            bot_name=bot_name,
             new_member_nickname=new_member_nickname,
             group_name=group_name or "",
         )
 
         provider = self._get_provider(event)
-        system_prompt = await self._build_system_prompt(event)
+        persona_prompt = self._get_persona_prompt(event)
 
         try:
             if provider:
@@ -89,7 +79,7 @@ class WelcomeLLMPlugin(Star):
                 resp = await provider.text_chat(
                     prompt=prompt,
                     context=[],
-                    system_prompt=system_prompt,
+                    system_prompt=persona_prompt if persona_prompt else None,
                     model=model,
                 )
                 if resp and resp.completion_text:
@@ -101,7 +91,7 @@ class WelcomeLLMPlugin(Star):
         return f"欢迎 {new_member_nickname} 加入，本群欢迎新人～请先阅读群公告，祝你玩得开心！"
 
     @filter.event_message_type(filter.EventMessageType.GROUP_MESSAGE)
-    async def on_group_notice_increase(self, event: AstrMessageEvent):
+    async def on_group_notice_increase(self, event: AstrMessageEvent, *args, **kwargs):
         """
         监听 OneBot notice 中的 group_increase（新成员入群），并@新成员 + LLM欢迎
         注意：Notice 事件被转换后仍标记为 GROUP_MESSAGE 类型，这里需用 raw_message 识别。

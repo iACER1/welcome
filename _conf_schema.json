@@ -20,15 +20,10 @@
     "_special": "select_persona",
     "default": ""
   },
-  "system_prompt_prefix": {
-    "description": "系统提示词前缀（附加到人格后）",
-    "type": "text",
-    "default": ""
-  },
   "welcome_prompt_template": {
     "description": "欢迎文案提示词模板",
     "type": "text",
-    "hint": "可用变量：{bot_name} {new_member_nickname} {group_name}",
-    "default": "你是{bot_name}，当有新成员加入QQ群，请用友好的语气欢迎他，简要介绍群主题和规则（若已知），邀请其先阅读置顶公告。输出不超过80字。不要包含@标记。新成员昵称：{new_member_nickname}，群名：{group_name}。只输出欢迎内容。"
+    "hint": "可用变量：{new_member_nickname} {group_name}",
+    "default": "当有新成员加入QQ群，请用友好的语气欢迎他。输出不超过80字。不要包含@标记。新成员昵称：{new_member_nickname}，群名：{group_name}。只输出欢迎内容。"
   }
 }
