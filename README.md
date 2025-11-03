@@ -3,9 +3,9 @@
 新成员加入QQ群时，自动通过 LLM 生成欢迎词并 @ 新成员，支持人格设定与可编辑提示词模板。
 
 - 入口类: [WelcomeLLMPlugin.register()](test plugins/welcome/main.py:9)
-- 事件监听: [WelcomeLLMPlugin.on_group_notice_increase()](test plugins/welcome/main.py:78)
-- LLM与人格: [WelcomeLLMPlugin._get_provider()](test plugins/welcome/main.py:28), [WelcomeLLMPlugin._build_system_prompt()](test plugins/welcome/main.py:40)
-- 提示词生成: [WelcomeLLMPlugin._gen_welcome_text()](test plugins/welcome/main.py:58)
+- 事件监听: [WelcomeLLMPlugin.on_group_notice_increase()](test plugins/welcome/main.py:142)
+- LLM与人格: [WelcomeLLMPlugin._get_provider()](test plugins/welcome/main.py:34), [WelcomeLLMPlugin._compose_system_prompt()](test plugins/welcome/main.py:73)
+- 提示词生成: [WelcomeLLMPlugin._gen_welcome_text()](test plugins/welcome/main.py:84)
 - 配置 Schema: [_conf_schema.json](test plugins/welcome/_conf_schema.json)
 
 ## 功能
@@ -39,13 +39,12 @@
 - persona_id(string, _special="select_persona"): 指定人格 ID，优先使用该人格作为 system prompt
 - system_prompt_prefix(text): 在人格系统提示词之后追加的 system 前缀
 - welcome_prompt_template(text): 欢迎词提示词模板，可用变量:
-  - {bot_name}: 机器人名（当前实现固定为 AstrBot）
   - {new_member_nickname}: 新成员昵称（或QQ号兜底）
   - {group_name}: 群名（可获取时）
 
 默认模板示例：
 ```
-你是{bot_name}，当有新成员加入QQ群，请用友好的语气欢迎他，简要介绍群主题和规则（若已知），邀请其先阅读置顶公告。输出不超过80字。不要包含@标记。新成员昵称：{new_member_nickname}，群名：{group_name}。只输出欢迎内容。
+当有新成员加入QQ群，请用友好的语气欢迎他。输出不超过80字。不要包含@标记。新成员昵称：{new_member_nickname}，群名：{group_name}。只输出欢迎内容。
 ```
 
 注意：模板中不要包含 @，本插件会在发送阶段正确拼接 [Comp.At()](plugin.md:158) 与 [Comp.Plain()](plugin.md:153)。
@@ -89,6 +88,13 @@
    - 检查 LLM Provider 是否可用
    - 查看 AstrBot 日志（插件会输出错误日志）
 
+## 调试与日志
+
+- 插件日志默认写入 AstrBot 主进程日志（例如 `astrbot_debug.log`），关键字可搜索 `welcome_llm`。
+- 若需验证配置是否生效，可在 WebUI 插件管理中重载插件并再次查看日志提示。
+- aiocqhttp 平台 API 调用失败时会输出 `get_group_member_info` 相关警告，确认协议端权限或缓存状态。
+- 调试 LLM 输出时，可在配置中暂时关闭 `enable`，再通过 `/helloworld` 指令验证插件加载是否正常。
+
 ## 常见问题
 
 - metadata.yaml 报 YAML schema 警告（如 VSCode 提示缺少 spec）：这通常是本地编辑器的 YAML 关联错误，不影响 AstrBot 读取插件元数据。模板格式参考 [metadata.yaml](test plugins/welcome/metadata.yaml:1)。
@@ -97,6 +103,10 @@
 
 ## 变更日志
 
+- v2.0.0
+  - 修复: 兼容 aiocqhttp.Event 类型的 raw_message，确保 notice 事件被触发
+  - 新增: system_prompt_prefix 配置项，可在人格提示词后追加自定义前缀
+  - 优化: 成员昵称获取与 LLM 请求失败时的错误处理
 - v1.0.0
   - 新增: 监听群新成员加入，调用 LLM 生成欢迎文本并 @ 新成员
   - 新增: 可编辑提示词模板、人格兼容、provider/model 可选指定

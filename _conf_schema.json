@@ -20,6 +20,12 @@
     "_special": "select_persona",
     "default": ""
   },
+  "system_prompt_prefix": {
+    "description": "在人格系统提示词后追加的前缀，支持多行文本",
+    "type": "text",
+    "hint": "留空则仅使用人格或默认系统提示词",
+    "default": ""
+  },
   "welcome_prompt_template": {
     "description": "欢迎文案提示词模板",
     "type": "text",

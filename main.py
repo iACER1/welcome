@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Optional
 
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
@@ -6,7 +6,7 @@ from astrbot.api import logger
 import astrbot.api.message_components as Comp
 
 
-@register("welcome_llm", "YourName", "新成员入群欢迎插件：通过LLM生成欢迎词并@新成员，兼容人格设定", "1.0.0")
+@register("welcome_llm", "YourName", "新成员入群欢迎插件：通过LLM生成欢迎词并@新成员，兼容人格设定", "2.0.0")
 class WelcomeLLMPlugin(Star):
     def __init__(self, context: Context, config: Optional[dict] = None):
         """
@@ -14,6 +14,18 @@ class WelcomeLLMPlugin(Star):
         """
         super().__init__(context)
         self.config = config or {}
+
+    @staticmethod
+    def _raw_get(source: Any, key: str, default: Any = None) -> Any:
+        if isinstance(source, dict):
+            return source.get(key, default)
+        return getattr(source, key, default)
+
+    @staticmethod
+    def _ensure_str(value: Any, default: str = "") -> str:
+        if value is None:
+            return default
+        return str(value)
 
     async def initialize(self):
         """插件初始化（可选）。"""
@@ -27,6 +39,10 @@ class WelcomeLLMPlugin(Star):
                 prov = self.context.get_provider_by_id(provider_id=prov_id)
                 if prov:
                     return prov
+                logger.warning(
+                    "[welcome_llm] 指定的 provider_id=%s 未找到，回退到当前会话提供商",
+                    prov_id,
+                )
             return self.context.get_using_provider(umo=event.unified_msg_origin)
         except Exception as e:
             logger.error(f"[welcome_llm] 获取LLM提供商失败: {e}")
@@ -54,6 +70,17 @@ class WelcomeLLMPlugin(Star):
             logger.warning(f"[welcome_llm] 获取人格失败: {e}")
         return ""
 
+    def _compose_system_prompt(self, persona_prompt: str) -> Optional[str]:
+        prefix = (self.config.get("system_prompt_prefix") or "").strip()
+        prompt = persona_prompt.strip() if persona_prompt else ""
+        if prompt and prefix:
+            return f"{prompt.rstrip()}\n{prefix}"
+        if prompt:
+            return prompt
+        if prefix:
+            return prefix
+        return None
+
     async def _gen_welcome_text(self, event: AstrMessageEvent, group_name: str, new_member_nickname: str) -> str:
         """
         调用 LLM 生成欢迎文本；失败时回退到本地模板。
@@ -71,7 +98,7 @@ class WelcomeLLMPlugin(Star):
         )
 
         provider = self._get_provider(event)
-        persona_prompt = self._get_persona_prompt(event)
+        persona_prompt = self._compose_system_prompt(self._get_persona_prompt(event))
 
         try:
             if provider:
@@ -79,7 +106,7 @@ class WelcomeLLMPlugin(Star):
                 resp = await provider.text_chat(
                     prompt=prompt,
                     context=[],
-                    system_prompt=persona_prompt if persona_prompt else None,
+                    system_prompt=persona_prompt,
                     model=model,
                 )
                 if resp and resp.completion_text:
@@ -90,53 +117,73 @@ class WelcomeLLMPlugin(Star):
         # 本地回退
         return f"欢迎 {new_member_nickname} 加入，本群欢迎新人～请先阅读群公告，祝你玩得开心！"
 
-    @filter.event_message_type(filter.EventMessageType.ALL)
+    async def _resolve_member_nickname(
+        self, event: AstrMessageEvent, group_id: str, new_user_id: str
+    ) -> str:
+        nickname = new_user_id
+        if event.get_platform_name() != "aiocqhttp":
+            return nickname
+        bot = getattr(event, "bot", None)
+        if bot is None:
+            return nickname
+        try:
+            info = await bot.call_action(
+                action="get_group_member_info",
+                group_id=int(group_id),
+                user_id=int(new_user_id),
+                no_cache=False,
+            )
+            if info:
+                return info.get("card") or info.get("nickname") or nickname
+        except Exception as e:
+            logger.warning(f"[welcome_llm] 获取新成员昵称失败: {e}")
+        return nickname
+
+    @filter.event_message_type(filter.EventMessageType.GROUP_MESSAGE)
     async def on_group_notice_increase(self, event: AstrMessageEvent):
         """
         监听 OneBot notice 中的 group_increase（新成员入群），并@新成员 + LLM欢迎
         """
-        # 只处理群消息类型的事件
-        if not event.get_group_id():
+        raw = getattr(event.message_obj, "raw_message", None)
+        if raw is None:
+            logger.debug("[welcome_llm] 收到无 raw_message 的事件，忽略。")
             return
-            
-        # 检查是否为 notice 事件
-        raw = getattr(event.message_obj, "raw_message", {}) or {}
-        if not isinstance(raw, dict) or raw.get("post_type") != "notice":
+
+        post_type = self._raw_get(raw, "post_type")
+        if post_type != "notice":
             return
-        if raw.get("notice_type") != "group_increase":
+
+        notice_type = self._raw_get(raw, "notice_type")
+        if notice_type != "group_increase":
             return
 
         if not self.config.get("enable", True):
+            logger.debug("[welcome_llm] 插件已在配置中禁用。")
             return
 
         group_id = event.get_group_id()
-        new_user_id = str(raw.get("user_id") or "")
+        new_user_id = self._ensure_str(self._raw_get(raw, "user_id"))
         if not group_id or not new_user_id:
+            logger.debug(
+                "[welcome_llm] 缺少 group_id 或 user_id，post_type=%s raw=%s",
+                post_type,
+                raw,
+            )
             return
 
-        # 获取新成员昵称
-        nickname = new_user_id
-        try:
-            if event.get_platform_name() == "aiocqhttp":
-                info = await event.bot.call_action(
-                    action="get_group_member_info",
-                    group_id=int(group_id),
-                    user_id=int(new_user_id),
-                    no_cache=False,
-                )
-                if info:
-                    nickname = info.get("card") or info.get("nickname") or nickname
-        except Exception as e:
-            logger.warning(f"[welcome_llm] 获取新成员昵称失败: {e}")
+        nickname = await self._resolve_member_nickname(
+            event, group_id=group_id, new_user_id=new_user_id
+        )
 
-        # 群名（若可用）
         group_name = ""
         try:
-            group_name = event.message_obj.group.group_name or ""
+            group_obj = getattr(event.message_obj, "group", None)
+            if group_obj and getattr(group_obj, "group_name", None):
+                group_name = group_obj.group_name or ""
+            else:
+                group_name = self._raw_get(raw, "group_name", "")
         except Exception:
-            pass
-
-        # 生成欢迎文本并发送（链路：@ + 文本）
+            group_name = ""
         text = await self._gen_welcome_text(
             event, group_name=group_name, new_member_nickname=nickname
         )
