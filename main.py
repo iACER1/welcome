@@ -57,15 +57,31 @@ class WelcomeLLMPlugin(Star):
             if persona_id:
                 persona = await pm.get_persona(persona_id)
                 if persona and getattr(persona, "system_prompt", None):
-                    return persona.system_prompt or ""
+                    prompt = persona.system_prompt or ""
+                    logger.debug(
+                        "[welcome_llm] 使用配置人格(id=%s)，prompt长度=%d",
+                        persona_id,
+                        len(prompt),
+                    )
+                    return prompt
+                logger.warning(
+                    "[welcome_llm] 指定的人格 id=%s 未找到 system_prompt，回退默认人格",
+                    persona_id,
+                )
             # 回退默认人格（v3 兼容）
             v3 = await pm.get_default_persona_v3(umo=event.unified_msg_origin)
             if v3:
                 # v3 可能是 TypedDict 或对象
                 if isinstance(v3, dict):
-                    return v3.get("prompt", "") or ""
+                    prompt = v3.get("prompt", "") or ""
                 elif hasattr(v3, "prompt"):
-                    return v3.prompt or ""
+                    prompt = v3.prompt or ""
+                else:
+                    prompt = ""
+                logger.debug(
+                    "[welcome_llm] 使用默认人格 prompt，长度=%d", len(prompt)
+                )
+                return prompt
         except Exception as e:
             logger.warning(f"[welcome_llm] 获取人格失败: {e}")
         return ""
@@ -73,13 +89,22 @@ class WelcomeLLMPlugin(Star):
     def _compose_system_prompt(self, persona_prompt: str) -> Optional[str]:
         prefix = (self.config.get("system_prompt_prefix") or "").strip()
         prompt = persona_prompt.strip() if persona_prompt else ""
+        combined = None
         if prompt and prefix:
-            return f"{prompt.rstrip()}\n{prefix}"
-        if prompt:
-            return prompt
-        if prefix:
-            return prefix
-        return None
+            combined = f"{prompt.rstrip()}\n{prefix}"
+        elif prompt:
+            combined = prompt
+        elif prefix:
+            combined = prefix
+        if combined is not None:
+            logger.debug(
+                "[welcome_llm] 组合后的 system_prompt 长度=%d (前缀长度=%d)",
+                len(combined),
+                len(prefix),
+            )
+        else:
+            logger.debug("[welcome_llm] 未找到人格 prompt 或前缀，system_prompt 为空")
+        return combined
 
     async def _gen_welcome_text(self, event: AstrMessageEvent, group_name: str, new_member_nickname: str) -> str:
         """
@@ -99,6 +124,19 @@ class WelcomeLLMPlugin(Star):
 
         provider = self._get_provider(event)
         persona_prompt = self._compose_system_prompt(await self._get_persona_prompt(event))
+        logger.debug(
+            "[welcome_llm] LLM 请求参数: provider=%s, model=%s, system_prompt_len=%d",
+            getattr(provider, "provider_config", {}).get("id") if provider else None,
+            self.config.get("model")
+            or getattr(provider, "provider_config", {}).get("model"),
+            len(persona_prompt) if persona_prompt else 0,
+        )
+        logger.debug(
+            "[welcome_llm] 调用 LLM 前的设置: provider=%s, model=%s, system_prompt_len=%d",
+            getattr(provider, "provider_config", {}).get("id") if provider else None,
+            self.config.get("model") or getattr(provider, "provider_config", {}).get("model"),
+            len(persona_prompt) if persona_prompt else 0,
+        )
 
         try:
             if provider:
