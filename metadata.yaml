@@ -1,6 +1,6 @@
 name: welcome_llm # 插件唯一识别名，建议小写、无空格
 display_name: 入群欢迎 LLM # 展示名称（>= v4.5.0 生效）
 desc: 新成员入群时，通过 LLM 生成欢迎词并 @ 新成员，兼容人格设定与可编辑提示词。 # 简短描述
-version: v1.0.0 # 版本号
+version: v1.1.0 # 版本号
 author: IACER # 作者
 repo: https://github.com/iACER1/welcome # 仓库地址（可选）
