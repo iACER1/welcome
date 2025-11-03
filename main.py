@@ -48,18 +48,18 @@ class WelcomeLLMPlugin(Star):
             logger.error(f"[welcome_llm] 获取LLM提供商失败: {e}")
             return None
 
-    def _get_persona_prompt(self, event: AstrMessageEvent) -> str:
+    async def _get_persona_prompt(self, event: AstrMessageEvent) -> str:
         """获取人格设定的提示词"""
         persona_id = self.config.get("persona_id", "")
         try:
             pm = self.context.persona_manager
             # 优先使用指定人格
             if persona_id:
-                persona = pm.get_persona(persona_id)
-                if persona and hasattr(persona, "system_prompt"):
+                persona = await pm.get_persona(persona_id)
+                if persona and getattr(persona, "system_prompt", None):
                     return persona.system_prompt or ""
             # 回退默认人格（v3 兼容）
-            v3 = pm.get_default_persona_v3(umo=event.unified_msg_origin)
+            v3 = await pm.get_default_persona_v3(umo=event.unified_msg_origin)
             if v3:
                 # v3 可能是 TypedDict 或对象
                 if isinstance(v3, dict):
@@ -98,7 +98,7 @@ class WelcomeLLMPlugin(Star):
         )
 
         provider = self._get_provider(event)
-        persona_prompt = self._compose_system_prompt(self._get_persona_prompt(event))
+        persona_prompt = self._compose_system_prompt(await self._get_persona_prompt(event))
 
         try:
             if provider:
