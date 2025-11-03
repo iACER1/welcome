@@ -1,0 +1,34 @@
+{
+  "enable": {
+    "description": "是否启用入群欢迎",
+    "type": "bool",
+    "default": true
+  },
+  "provider_id": {
+    "description": "LLM提供商ID，不填则使用当前会话默认提供商",
+    "type": "string",
+    "_special": "select_provider"
+  },
+  "model": {
+    "description": "强制指定模型名称（可选）",
+    "type": "string",
+    "default": ""
+  },
+  "persona_id": {
+    "description": "人格ID，优先使用该人格，不填则使用默认人格",
+    "type": "string",
+    "_special": "select_persona",
+    "default": ""
+  },
+  "system_prompt_prefix": {
+    "description": "系统提示词前缀（附加到人格后）",
+    "type": "text",
+    "default": ""
+  },
+  "welcome_prompt_template": {
+    "description": "欢迎文案提示词模板",
+    "type": "text",
+    "hint": "可用变量：{bot_name} {new_member_nickname} {group_name}",
+    "default": "你是{bot_name}，当有新成员加入QQ群，请用友好的语气欢迎他，简要介绍群主题和规则（若已知），邀请其先阅读置顶公告。输出不超过80字。不要包含@标记。新成员昵称：{new_member_nickname}，群名：{group_name}。只输出欢迎内容。"
+  }
+}
