@@ -4,6 +4,7 @@ from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
 import astrbot.api.message_components as Comp
+import inspect
 
 
 @register("welcome_llm", "YourName", "新成员入群欢迎插件：通过LLM生成欢迎词并@新成员，兼容人格设定", "1.0.0")
@@ -32,21 +33,27 @@ class WelcomeLLMPlugin(Star):
             logger.error(f"[welcome_llm] 获取LLM提供商失败: {e}")
             return None
 
-    def _build_system_prompt(self, event: AstrMessageEvent) -> str:
-        """组合人格设定与可选前缀，形成最终 system prompt"""
+    async def _build_system_prompt(self, event: AstrMessageEvent) -> str:
+        """组合人格设定与可选前缀，形成最终 system prompt（兼容同步/异步 PersonaManager API）"""
         persona_prompt = ""
         persona_id = self.config.get("persona_id", "")
         try:
             pm = self.context.persona_manager
+            # 优先使用指定人格
             if persona_id:
                 persona = pm.get_persona(persona_id)
+                if inspect.isawaitable(persona):
+                    persona = await persona
                 if persona:
-                    persona_prompt = persona.system_prompt or ""
+                    persona_prompt = getattr(persona, "system_prompt", "") or ""
+            # 回退默认人格（v3 兼容）
             if not persona_prompt:
-                # 兼容 v3 人格
                 v3 = pm.get_default_persona_v3(umo=event.unified_msg_origin)
+                if inspect.isawaitable(v3):
+                    v3 = await v3
                 if v3:
-                    persona_prompt = v3.get("prompt", "") or ""
+                    # v3 可能是 TypedDict，也可能是对象；两种方式兼容获取 prompt
+                    persona_prompt = (v3.get("prompt", "") if isinstance(v3, dict) else getattr(v3, "prompt", "")) or ""
         except Exception as e:
             logger.warning(f"[welcome_llm] 获取人格失败: {e}")
 
@@ -74,7 +81,7 @@ class WelcomeLLMPlugin(Star):
         )
 
         provider = self._get_provider(event)
-        system_prompt = self._build_system_prompt(event)
+        system_prompt = await self._build_system_prompt(event)
 
         try:
             if provider:
