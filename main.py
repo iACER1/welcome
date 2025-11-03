@@ -90,12 +90,15 @@ class WelcomeLLMPlugin(Star):
         # 本地回退
         return f"欢迎 {new_member_nickname} 加入，本群欢迎新人～请先阅读群公告，祝你玩得开心！"
 
-    @filter.event_message_type(filter.EventMessageType.GROUP_MESSAGE)
-    async def on_group_notice_increase(self, event: AstrMessageEvent, *args, **kwargs):
+    @filter.event_message_type(filter.EventMessageType.ALL)
+    async def on_group_notice_increase(self, event: AstrMessageEvent):
         """
         监听 OneBot notice 中的 group_increase（新成员入群），并@新成员 + LLM欢迎
         注意：Notice 事件被转换后仍标记为 GROUP_MESSAGE 类型，这里需用 raw_message 识别。
         """
+        # 只处理群消息类型的事件
+        if not event.get_group_id():
+            return
         raw = getattr(event.message_obj, "raw_message", {}) or {}
         if not isinstance(raw, dict) or raw.get("post_type") != "notice":
             return
