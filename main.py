@@ -140,7 +140,9 @@ class WelcomeLLMPlugin(Star):
         return nickname
 
     @filter.event_message_type(filter.EventMessageType.GROUP_MESSAGE)
-    async def on_group_notice_increase(self, event: AstrMessageEvent):
+    async def on_group_notice_increase(
+        self, event: AstrMessageEvent, *args, **kwargs
+    ):
         """
         监听 OneBot notice 中的 group_increase（新成员入群），并@新成员 + LLM欢迎
         """
