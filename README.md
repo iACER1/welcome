@@ -1,112 +1,49 @@
-# 入群欢迎 LLM（welcome_llm）
+# Welcome Clean 插件
 
-新成员加入QQ群时，自动通过 LLM 生成欢迎词并 @ 新成员，支持人格设定与可编辑提示词模板。
+一个干净、可配置的 AstrBot 入群欢迎插件，保持 @ 新成员能力，提供静态模板与可选 LLM 文案生成，避免旧版本中的复杂副作用。
 
-- 入口类: [WelcomeLLMPlugin.register()](test plugins/welcome/main.py:9)
-- 事件监听: [WelcomeLLMPlugin.handle_group_notice_increase()](test plugins/welcome/main.py:142)
-- LLM与人格: [WelcomeLLMPlugin._get_provider()](test plugins/welcome/main.py:34), [WelcomeLLMPlugin._compose_system_prompt()](test plugins/welcome/main.py:73)
-- 提示词生成: [WelcomeLLMPlugin._gen_welcome_text()](test plugins/welcome/main.py:84)
-- 配置 Schema: [_conf_schema.json](test plugins/welcome/_conf_schema.json)
+## 功能特性
 
-## 功能
+- 监听 OneBot `group_increase` 事件，自动识别新入群成员 QQ 号。
+- 调用 QQ 协议端 `get_group_member_info` 获取入群者群名片/昵称（若可用）。
+- 静态模板渲染，支持 `{nickname}`、`{group_name}` 占位符。
+- 可选启用 LLM 欢迎语，自动拼接人格提示词与附加 System Prompt。
+- 系统化配置项（`_conf_schema.json`），可通过 WebUI 管理。
+- 文本长度限制，避免 LLM 输出过长内容。
+- 兜底模板确保在 LLM 调用失败时仍能发送欢迎语。
 
-- 监听 OneBot v11 notice: group_increase（新成员入群事件）
-- 自动调用当前会话使用的 LLM（或你配置的 provider/model），生成一段欢迎文本
-- 使用消息链发送: At(新成员) + 文本（不把 @ 交给 LLM生成，避免平台兼容性问题）
-- 兼容人格设定（优先使用你在配置里指定的 persona_id，否则回退到默认人格）
+## 配置项
 
-## 安装
+| 键名 | 类型 | 说明 |
+| ---- | ---- | ---- |
+| `enable` | bool | 总开关，默认启用。 |
+| `use_llm` | bool | 是否启用 LLM 文案生成。 |
+| `provider_id` | string | 指定的 LLM Provider ID，留空使用当前会话默认提供商。 |
+| `persona_id` | string | 指定人格 ID，留空使用默认人格。 |
+| `system_prompt_prefix` | text | 附加在人格 `system_prompt` 之后的额外提示。 |
+| `static_template` | string | 静态欢迎模板。占位符：`{nickname}`、`{group_name}`。 |
+| `fallback_template` | string | 模板渲染失败或其他异常时的兜底文案。 |
+| `max_length` | int | 欢迎语最大长度（10~200）。 |
 
-1) 将本插件目录放置于 AstrBot 项目内：
-- 推荐路径: data/plugins/welcome_llm
-- 临时测试也可直接放在 test plugins/welcome（本仓库已提供示例）
+> **提示**  
+> 若开启 LLM 模式，插件会：  
+> 1. 根据 `persona_id` 读取 System Prompt；  
+> 2. 拼接 `system_prompt_prefix`；  
+> 3. 以新成员昵称和群名生成最终提示词；  
+> 4. 调用 Provider `text_chat`，并对结果进行长度截断。
 
-2) 打开 AstrBot，本体运行后在 WebUI -> 插件管理 中找到该插件：
-- 点击 管理
-- 点击 重载插件（如果你做了代码更新）
-- 启用 插件
+## 事件处理流程
 
-3) 确保你已配置至少一个 LLM Provider（WebUI -> 设置 -> 提供商）
+1. `handle_group_event` 监听 `GROUP_MESSAGE`，筛选出 `notice` 中的 `group_increase`。
+2. 提取新成员 QQ 号和群号，调用 `get_group_member_info` 获取昵称/群名片。
+3. 构造欢迎语：优先调用 LLM；失败时使用静态模板；仍失败则使用兜底模板。
+4. 构建消息链 `[At(new_member_id), Plain(welcome_text)]` 并发送。
 
-## 配置
+## 开发说明
 
-本插件在目录下提供 [_conf_schema.json](test plugins/welcome/_conf_schema.json)，AstrBot 将自动解析并注入到插件实例 config 参数中。
+- 插件入口位于 [`main.py`](test plugins/welcome/main.py:1)。
+- 配置 Schema 定义在 [`_conf_schema.json`](test plugins/welcome/_conf_schema.json:1)，支持 WebUI 编辑。
+- 元数据在 [`metadata.yaml`](test plugins/welcome/metadata.yaml:1) 中维护。
+- 若需扩展，可在 `WelcomeConfig` 增加新字段，并同步 Schema / README。
 
-可配置项：
-- enable(bool, default=true): 是否启用入群欢迎
-- provider_id(string, _special="select_provider"): 指定使用的 LLM 提供商，不填则使用当前会话默认提供商
-- model(string): 可选，强制指定模型名称
-- persona_id(string, _special="select_persona"): 指定人格 ID，优先使用该人格作为 system prompt
-- system_prompt_prefix(text): 在人格系统提示词之后追加的 system 前缀
-- welcome_prompt_template(text): 欢迎词提示词模板，可用变量:
-  - {new_member_nickname}: 新成员昵称（或QQ号兜底）
-  - {group_name}: 群名（可获取时）
-
-默认模板示例：
-```
-当有新成员加入QQ群，请用友好的语气欢迎他。输出不超过80字。不要包含@标记。新成员昵称：{new_member_nickname}，群名：{group_name}。只输出欢迎内容。
-```
-
-注意：模板中不要包含 @，本插件会在发送阶段正确拼接 [Comp.At()](plugin.md:158) 与 [Comp.Plain()](plugin.md:153)。
-
-## 工作原理
-
-- AstrBot 的 aiocqhttp 平台适配器会把 OneBot 的 notice 事件转换为 AstrBotMessage，若包含 group_id 则类型标记为 GROUP_MESSAGE。
-- 插件使用 [filter.event_message_type()](plugin.md:352) 监听 GROUP_MESSAGE，并在 Handler 内部检查 [event.message_obj.raw_message](plugin.md:171)：
-  - post_type == "notice"
-  - notice_type == "group_increase"
-- 获取新成员的用户 ID/昵称：
-  - 在 aiocqhttp 下，调用 `get_group_member_info` 获取 card/nickname 作为显示名
-  - 获取失败时使用 QQ号作为兜底昵称
-- 构造 system prompt：
-  - 优先使用配置 persona_id 对应的人格
-  - 否则回退到默认人格（v3 兼容）
-  - 追加 system_prompt_prefix（如不为空）
-- 调用 Provider.text_chat() 生成欢迎文本；失败时本地回退固定文案
-- 以消息链发送: [Comp.At(qq)](plugin.md:158) + [Comp.Plain(text)](plugin.md:153)
-
-## 人格兼容
-
-- 指定 persona_id 时直接读取该人格的 system_prompt
-- 未指定时使用 PersonaManager 的默认人格（v3 兼容对象）
-- 你可以在 WebUI 的人格管理中创建/配置人格，并把其 ID 填到本插件配置
-
-## 平台兼容性
-
-- 主要针对 OneBot v11（如 go-cqhttp/Napcat/Lagrange 等）
-- 其他平台若能将“新成员加入”的事件转化为 AstrBot 的通知并带上 group_id，同样可以触发；但昵称 API 不一定可用，可能显示为 ID
-
-## 测试步骤
-
-1) 在 WebUI 中启用插件，保存配置
-2) 将机器人拉入测试群，或由他人邀请新成员加入测试群
-3) 观察群内是否自动发送:
-   - @新成员
-   - 生成的欢迎文本（不含@）
-4) 如果长时间无响应：
-   - 检查 OneBot 连接是否正常
-   - 检查 LLM Provider 是否可用
-   - 查看 AstrBot 日志（插件会输出错误日志）
-
-## 调试与日志
-
-- 插件日志默认写入 AstrBot 主进程日志（例如 `astrbot_debug.log`），关键字可搜索 `welcome_llm`。
-- 若需验证配置是否生效，可在 WebUI 插件管理中重载插件并再次查看日志提示。
-- aiocqhttp 平台 API 调用失败时会输出 `get_group_member_info` 相关警告，确认协议端权限或缓存状态。
-- 调试 LLM 输出时，可在配置中暂时关闭 `enable`，再通过 `/helloworld` 指令验证插件加载是否正常。
-
-## 常见问题
-
-- metadata.yaml 报 YAML schema 警告（如 VSCode 提示缺少 spec）：这通常是本地编辑器的 YAML 关联错误，不影响 AstrBot 读取插件元数据。模板格式参考 [metadata.yaml](test plugins/welcome/metadata.yaml:1)。
-- LLM 没有回复文本：请确认 provider_id/model 配置正确，或移除它们使用当前会话默认提供商；查看日志定位错误。
-- 没有正确 @ 新成员：请确认平台支持 At 组件；OneBot v11 的 At 由协议端负责解析。
-
-## 变更日志
-
-- v2.0.0
-  - 修复: 兼容 aiocqhttp.Event 类型的 raw_message，确保 notice 事件被触发
-  - 新增: system_prompt_prefix 配置项，可在人格提示词后追加自定义前缀
-  - 优化: 成员昵称获取与 LLM 请求失败时的错误处理
-- v1.0.0
-  - 新增: 监听群新成员加入，调用 LLM 生成欢迎文本并 @ 新成员
-  - 新增: 可编辑提示词模板、人格兼容、provider/model 可选指定
+欢迎根据自身需求二次开发，保持异步调用与异常处理即可无缝集成到 AstrBot 中。

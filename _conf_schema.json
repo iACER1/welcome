@@ -1,35 +1,42 @@
 {
   "enable": {
-    "description": "是否启用入群欢迎",
+    "description": "是否启用入群欢迎功能",
     "type": "bool",
     "default": true
   },
-  "provider_id": {
-    "description": "LLM提供商ID，不填则使用当前会话默认提供商",
-    "type": "string",
-    "_special": "select_provider"
+  "use_llm": {
+    "description": "是否启用 LLM 生成欢迎语，关闭则使用静态模板",
+    "type": "bool",
+    "default": false
   },
-  "model": {
-    "description": "强制指定模型名称（可选）",
+  "provider_id": {
+    "description": "指定使用的 LLM 提供商 ID（留空使用当前会话默认提供商）",
     "type": "string",
     "default": ""
   },
   "persona_id": {
-    "description": "人格ID，优先使用该人格，不填则使用默认人格",
+    "description": "指定人格 ID（留空使用当前会话默认人格）",
     "type": "string",
-    "_special": "select_persona",
     "default": ""
   },
   "system_prompt_prefix": {
-    "description": "在人格系统提示词后追加的前缀，支持多行文本",
+    "description": "附加到人格提示词后的额外 System Prompt，支持多行",
     "type": "text",
-    "hint": "留空则仅使用人格或默认系统提示词",
     "default": ""
   },
-  "welcome_prompt_template": {
-    "description": "欢迎文案提示词模板",
-    "type": "text",
-    "hint": "可用变量：{new_member_nickname} {group_name}",
-    "default": "当有新成员加入QQ群，请用友好的语气欢迎他。输出不超过80字。不要包含@标记。新成员昵称：{new_member_nickname}，群名：{group_name}。只输出欢迎内容。"
+  "static_template": {
+    "description": "静态欢迎模板，支持 {nickname}、{group_name}",
+    "type": "string",
+    "default": "欢迎 {nickname} 加入 {group_name}！请先阅读群公告。"
+  },
+  "fallback_template": {
+    "description": "当静态模板渲染失败时使用的兜底模板",
+    "type": "string",
+    "default": "欢迎 {nickname} 加入，祝你玩得开心！"
+  },
+  "max_length": {
+    "description": "欢迎语最大长度（10~200）",
+    "type": "int",
+    "default": 80
   }
 }
