@@ -72,13 +72,6 @@ def _normalize_optional_str(value: Any) -> Optional[str]:
     return text or None
 
 
-def _get_self_id(event: AstrMessageEvent) -> str:
-    try:
-        return _ensure_str(event.get_self_id())
-    except Exception:  # noqa: BLE001
-        return ""
-
-
 @register(
     "welcome_clean",
     "Apex",
@@ -92,19 +85,19 @@ class WelcomePlugin(Star):
         self._tag = "[welcome_clean]"
 
     @filter.event_message_type(filter.EventMessageType.GROUP_MESSAGE)
-    async def handle_group_event(self, event: AstrMessageEvent):
+    async def handle_group_event(
+        self, event: AstrMessageEvent, *extra_args, **extra_kwargs
+    ):
         if not self.settings.enable:
             return
 
+        if extra_args or extra_kwargs:
+            logger.debug(
+                f"{self._tag} handle_group_event 收到额外参数: args={extra_args} kwargs={extra_kwargs}"
+            )
+
         notice = self._extract_group_increase(event)
         if not notice:
-            return
-
-        self_id = _get_self_id(event)
-        if self_id and notice.user_id == self_id:
-            logger.debug(
-                f"{self._tag} 检测到机器人自身加入事件，忽略欢迎。self_id={self_id}"
-            )
             return
 
         nickname = await self._resolve_joiner_nickname(event, notice)
@@ -143,6 +136,12 @@ class WelcomePlugin(Star):
             _safe_get(raw, "group_id", event.get_group_id() or "")
         )
         user_id = _ensure_str(_safe_get(raw, "user_id"))
+        self_id = _ensure_str(_safe_get(raw, "self_id"))
+        if self_id and user_id == self_id:
+            logger.debug(
+                f"{self._tag} 收到机器人自身加入事件，忽略。self_id={self_id}"
+            )
+            return None
         operator_id = _normalize_optional_str(_safe_get(raw, "operator_id"))
         group_name = _ensure_str(
             _safe_get(raw, "group_name", self._infer_group_name(event))
