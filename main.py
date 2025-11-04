@@ -72,6 +72,13 @@ def _normalize_optional_str(value: Any) -> Optional[str]:
     return text or None
 
 
+def _get_self_id(event: AstrMessageEvent) -> str:
+    try:
+        return _ensure_str(event.get_self_id())
+    except Exception:  # noqa: BLE001
+        return ""
+
+
 @register(
     "welcome_clean",
     "Apex",
@@ -91,6 +98,13 @@ class WelcomePlugin(Star):
 
         notice = self._extract_group_increase(event)
         if not notice:
+            return
+
+        self_id = _get_self_id(event)
+        if self_id and notice.user_id == self_id:
+            logger.debug(
+                f"{self._tag} 检测到机器人自身加入事件，忽略欢迎。self_id={self_id}"
+            )
             return
 
         nickname = await self._resolve_joiner_nickname(event, notice)
