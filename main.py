@@ -85,31 +85,12 @@ class WelcomePlugin(Star):
         self._tag = "[welcome_clean]"
 
     @filter.event_message_type(filter.EventMessageType.GROUP_MESSAGE)
-    async def handle_group_event(
-        self, event: AstrMessageEvent, *extra_args, **extra_kwargs
-    ):
-        del extra_args
-        del extra_kwargs
+    async def handle_group_event(self, event: AstrMessageEvent):
         if not self.settings.enable:
             return
 
         notice = self._extract_group_increase(event)
         if not notice:
-            return
-
-        bot_self_id = _ensure_str(_safe_get(notice.raw, "self_id", ""))
-        if not bot_self_id:
-            bot_self_id = _ensure_str(getattr(event.message_obj, "self_id", ""))
-        if not bot_self_id:
-            try:
-                bot_self_id = _ensure_str(event.get_self_id())
-            except Exception:  # noqa: BLE001
-                bot_self_id = ""
-
-        if bot_self_id and notice.user_id == bot_self_id:
-            logger.debug(
-                f"{self._tag} 检测到机器人自身加入事件，忽略欢迎。self_id={bot_self_id}"
-            )
             return
 
         nickname = await self._resolve_joiner_nickname(event, notice)
