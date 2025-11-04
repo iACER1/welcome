@@ -85,12 +85,22 @@ class WelcomePlugin(Star):
         self._tag = "[welcome_clean]"
 
     @filter.event_message_type(filter.EventMessageType.GROUP_MESSAGE)
-    async def handle_group_event(self, event: AstrMessageEvent):
+    async def handle_group_event(
+        self, event: AstrMessageEvent, *extra_args, **extra_kwargs
+    ):
+        if extra_args or extra_kwargs:
+            logger.debug(
+                f"{self._tag} handle_group_event 接收到额外参数: args={extra_args} kwargs={extra_kwargs}"
+            )
+
         if not self.settings.enable:
             return
 
         notice = self._extract_group_increase(event)
         if not notice:
+            return
+
+        if self._is_self_join(event, notice):
             return
 
         nickname = await self._resolve_joiner_nickname(event, notice)
@@ -147,6 +157,33 @@ class WelcomePlugin(Star):
             group_name=group_name,
             raw=raw,
         )
+
+    def _resolve_bot_self_id(
+        self, event: AstrMessageEvent, notice: GroupIncreaseNotice
+    ) -> str:
+        raw_self = _ensure_str(_safe_get(notice.raw, "self_id"))
+        if raw_self:
+            return raw_self
+
+        msg_obj = getattr(event, "message_obj", None)
+        if msg_obj:
+            candidate = _ensure_str(getattr(msg_obj, "self_id", ""))
+            if candidate:
+                return candidate
+
+        try:
+            return _ensure_str(event.get_self_id())
+        except Exception:  # noqa: BLE001
+            return ""
+
+    def _is_self_join(self, event: AstrMessageEvent, notice: GroupIncreaseNotice) -> bool:
+        bot_self_id = self._resolve_bot_self_id(event, notice)
+        if bot_self_id and notice.user_id == bot_self_id:
+            logger.debug(
+                f"{self._tag} 检测到机器人自身加入事件，忽略欢迎。self_id={bot_self_id}"
+            )
+            return True
+        return False
 
     async def _resolve_joiner_nickname(
         self, event: AstrMessageEvent, notice: GroupIncreaseNotice
