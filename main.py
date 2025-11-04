@@ -85,7 +85,11 @@ class WelcomePlugin(Star):
         self._tag = "[welcome_clean]"
 
     @filter.event_message_type(filter.EventMessageType.GROUP_MESSAGE)
-    async def handle_group_event(self, event: AstrMessageEvent):
+    async def handle_group_event(
+        self, event: AstrMessageEvent, *extra_args, **extra_kwargs
+    ):
+        del extra_args
+        del extra_kwargs
         if not self.settings.enable:
             return
 
