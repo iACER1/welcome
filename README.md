@@ -41,9 +41,9 @@
 
 ## 开发说明
 
-- 插件入口位于 [`main.py`](test plugins/welcome/main.py:1)。
-- 配置 Schema 定义在 [`_conf_schema.json`](test plugins/welcome/_conf_schema.json:1)，支持 WebUI 编辑。
-- 元数据在 [`metadata.yaml`](test plugins/welcome/metadata.yaml:1) 中维护。
+- 插件入口位于 [`main.py`]。
+- 配置 Schema 定义在 [`_conf_schema.json`]，支持 WebUI 编辑。
+- 元数据在 [`metadata.yaml`] 中维护。
 - 若需扩展，可在 `WelcomeConfig` 增加新字段，并同步 Schema / README。
 
 欢迎根据自身需求二次开发，保持异步调用与异常处理即可无缝集成到 AstrBot 中。
